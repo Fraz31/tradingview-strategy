@@ -1,0 +1,129 @@
+//@version=4
+strategy("Combined Strategy", overlay=true)
+
+// Indicator 1: Support and Resistance
+maxnumsr = 10
+
+var float hi = na
+var float lo = na
+var float numpp = na
+
+get_sr_vals(i) =>
+    for j = 0 to array.size(hi1) - 1
+        if array.get(sr_up_level, j) == array.get(sr_dn_level, j)
+            if hi == na or array.get(hi1, j) > hi
+                hi := array.get(hi1, j)
+                lo := array.get(lo1, j)
+                numpp := array.get(numpp1, j)
+        else
+            if hi == na or (array.get(sr_up_level, j) >= lo and array.get(sr_up_level, j) <= hi) or (array.get(sr_dn_level, j) >= lo and array.get(sr_dn_level, j) <= hi)
+                if hi == na or array.get(sr_strength, j) >= hi
+                    hi := array.get(sr_strength, j)
+                    lo := array.get(lo1, j)
+                    numpp := array.get(numpp1, j)
+    [hi, lo, numpp]
+
+sr_dn_level = array.new_float()
+sr_up_level = array.new_float()
+sr_strength = array.new_float()
+sr_time = array.new_time()
+
+get_sr_val(level) =>
+    hi := na
+    lo := na
+    numpp := na
+    for i = 0 to array.size(hi1) - 1
+        [hi, lo, numpp] = get_sr_vals(i)
+        if hi != na and lo != na and numpp != na
+            if level == 1
+                array.unshift(sr_up_level, hi)
+            else if level == -1
+                array.unshift(sr_dn_level, lo)
+            else if level == 0
+                array.unshift(sr_up_level, hi)
+                array.unshift(sr_dn_level, lo)
+            array.unshift(sr_strength, numpp)
+            array.unshift(sr_time, time)
+            break
+
+find_sr_val(level) =>
+    hi := na
+    lo := na
+    numpp := na
+    for i = 0 to array.size(hi1) - 1
+        [hi, lo, numpp] = get_sr_vals(i)
+        if hi != na and lo != na and numpp != na
+            if level == 1
+                array.set(sr_up_level, i, hi)
+            else if level == -1
+                array.set(sr_dn_level, i, lo)
+            else if level == 0
+                array.set(sr_up_level, i, hi)
+                array.set(sr_dn_level, i, lo)
+            array.set(sr_strength, i, numpp)
+            array.set(sr_time, i, time)
+            break
+
+var float pp, ph, pl, pc
+[pp, ph, pl, pc] = ta.pivotpoints(hl2, hl2, hl2, hl2)
+
+hi1 = array.new_float()
+lo1 = array.new_float()
+numpp1 = array.new_float()
+
+array.unshift(hi1, ph)
+array.unshift(lo1, pl)
+array.unshift(numpp1, pp)
+
+find_sr_val(0)
+
+// Indicator 2: Exponential Moving Average
+ema1 = ta.ema(close, 10)
+ema2 = ta.ema(close, 20)
+
+// Indicator 3: Simple Moving Average
+sma = ta.sma(close, 50)
+
+// Calculate probabilities
+prob1 = 0.3
+prob2 = 0.4
+prob3 = 0.2
+
+// Calculate combined signals
+buy_signal = ta.crossover(ema1, ema2)
+sell_signal = ta.crossunder(ema1, ema2)
+
+buy_signal2 = ta.crossover(sma, ema2)
+sell_signal2 = ta.crossunder(sma, ema2)
+
+combined_buy_signal = (buy_signal and buy_signal2) ? 1 : 0
+combined_sell_signal = (sell_signal and sell_signal2) ? 1 : 0
+
+// Determine trade signal based on probabilities
+trade_signal = 0
+if combined_buy_signal
+    trade_signal := trade_signal + prob1
+if combined_sell_signal
+    trade_signal := trade_signal - prob1
+if buy_signal
+    trade_signal := trade_signal + prob2
+if sell_signal
+    trade_signal := trade_signal - prob2
+if buy_signal2
+    trade_signal := trade_signal + prob3
+if sell_signal2
+    trade_signal := trade_signal - prob3
+
+// Plotting
+plotshape(combined_buy_signal, title="Combined Buy Signal", style=shape.labelup, location=location.belowbar, color=color.green, text="BUY")
+plotshape(combined_sell_signal, title="Combined Sell Signal", style=shape.labeldown, location=location.abovebar, color=color.red, text="SELL")
+
+plot(ema1, title="EMA1", color=color.blue, linewidth=1)
+plot(ema2, title="EMA2", color=color.red, linewidth=1)
+plot(sma, title="SMA", color=color.white, linewidth=1)
+
+// Alert conditions
+alertcondition(ta.crossover(buy_signal, 0) and ta.crossover(buy_signal2, 0), "Buy Signal")
+alertcondition(ta.crossunder(sell_signal, 0) and ta.crossunder(sell_signal2, 0), "Sell Signal")
+alertcondition(ta.crossover(buy_signal, 0) and ta.crossover(buy_signal2, 0), "Buy Signal Alert")
+alertcondition(ta.crossunder(sell_signal, 0) and ta.crossunder(sell_signal2, 0), "Sell Signal Alert")
